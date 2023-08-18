@@ -8,3 +8,8 @@ __pycache__/
 *.pt
 *.pyc
 input.txt
+
+
+# Added by cargo
+
+/target
