@@ -119,9 +119,13 @@ val_data = np.memmap(os.path.join(data_dir, 'val.bin'), dtype=np.uint16, mode='r
 import compressor
 def get_batch(split):
     data = train_data if split == 'train' else val_data
-    ix = torch.randint(len(data) - block_size, (batch_size,))
-    # compress x,y
-    xy = torch.stack([torch.tensor(compressor.compress(data[i:i+1+block_size].astype(np.int64).tolist())) for i in ix])
+    ix = torch.randint(len(data) - block_size*2, (batch_size,))
+    xy = torch.ones((batch_size, block_size + 1), dtype=torch.int64).fill_(97) # pad
+    for idx,i in enumerate(ix):
+        x = torch.tensor(compressor.compress(data[i:i+1+block_size*2].astype(np.int64).tolist()))
+        dim = min(len(x), block_size + 1)
+        xy[idx,:dim] = x[:dim]
+
     x = xy[:,:-1]
     y = xy[:,1:]
     if device_type == 'cuda':

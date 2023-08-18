@@ -53,7 +53,7 @@ val_ids.tofile(os.path.join(os.path.dirname(__file__), 'val.bin'))
 
 # save the meta information as well, to help us encode/decode later
 meta = {
-    'vocab_size': vocab_size,
+    'vocab_size': vocab_size + 16 + 16 + 1, # 4x4 (offset) + 16 (length) + 1 (pad)
     'itos': itos,
     'stoi': stoi,
 }
@@ -63,6 +63,6 @@ with open(os.path.join(os.path.dirname(__file__), 'meta.pkl'), 'wb') as f:
 # length of dataset in characters:  1115394
 # all the unique characters:
 #  !$&',-.3:;?ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz
-# vocab size: 65
+# vocab size: 65 + 33 = 98
 # train has 1003854 tokens
 # val has 111540 tokens
