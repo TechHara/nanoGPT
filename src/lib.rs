@@ -5,32 +5,47 @@ type Pos = u16;
 const MASK: usize = NUM_HASH - 1;
 const NUM_HASH: usize = 1 << 9; // 9 bit or 512
 
+// x from 0 to 64 inclusive
+const OFFSET_8: Number = 65;
+const OFFSET_1: Number = 65 + 8;
+const LENGTH: Number = 65 + 16;
+
 #[pyfunction]
 fn compress(xs: Vec<Number>) -> PyResult<Vec<Number>> {
-    // x from 0 to 64 inclusive
-    const OFFSET_8: Number = 65;
-    const OFFSET_1: Number = 65 + 8;
-    const LENGTH: Number = 65 + 16;
-
     if xs.len() < 3 {
         return Ok(xs);
     }
 
-    let mut result = Vec::new();
-
+    let mut result = Vec::with_capacity(xs.len());
     let mut chain = HashChain::new(&xs[..], 256);
-    for (pos, x) in xs.iter().skip(2).enumerate() {
+    let mut pos = 0;
+    let mut iter = xs.iter().skip(2);
+    while let Some(x) = iter.next() {
         if let Some(match_pos) = chain.insert(*x) {
             let length_pos = chain.get_max_length(match_pos, pos as Pos);
-            if length_pos.0 >= 4 {
-                let offset = pos - length_pos.1;
-                result.push(offset as Number / 8 + OFFSET_8);
-                result.push(offset as Number % 8 + OFFSET_1);
-                result.push(length_pos.0 as Number + LENGTH);
-            } else {
-                result.push(*x);
+            match length_pos.0 {
+                0..=3 => {
+                    result.push(xs[pos]);
+                    pos += 1;
+                }
+                length => {
+                    let offset = (pos - length_pos.1) as Number;
+                    result.push(offset / 8 + OFFSET_8);
+                    result.push(offset % 8 + OFFSET_1);
+                    result.push(length as Number + LENGTH);
+                    for _ in 0..length {
+                        iter.next().map(|x| chain.insert(*x));
+                        pos += 1;
+                    }
+                }
             }
+        } else {
+            result.push(xs[pos]);
+            pos += 1;
         }
+    }
+    for x in &xs[pos..] {
+        result.push(*x);
     }
     Ok(result)
 }
@@ -68,18 +83,16 @@ impl HashChain<'_> {
     // update head & tail
     // returns pos pointed by head
     fn insert(&mut self, x: Number) -> Option<Pos> {
-        self.cur_pos += 1;
         self.update_hash(x);
-        let match_pos = match self.head[self.h] {
-            0 => None,
-            prev_pos => {
-                self.head[self.h] = self.cur_pos;
-                self.tail[self.cur_pos as usize] = prev_pos;
-                Some(prev_pos)
-            }
-        };
-
-        match_pos
+        let prev_pos = self.head[self.h];
+        self.head[self.h] = self.cur_pos;
+        self.tail[self.cur_pos as usize] = prev_pos;
+        self.cur_pos += 1;
+        if prev_pos == 0 {
+            None
+        } else {
+            Some(prev_pos)
+        }
     }
 
     fn update_hash(&mut self, x: Number) {
@@ -123,5 +136,15 @@ impl HashChain<'_> {
         }
 
         result
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::compress;
+
+    #[test]
+    fn test() {
+        println!("{:?}", compress(vec![0, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 6]));
     }
 }
