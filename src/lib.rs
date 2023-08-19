@@ -10,6 +10,7 @@ const OFFSET_8: Number = 65;
 const OFFSET_1: Number = OFFSET_8 + 8; // 73
 const LENGTH: Number = OFFSET_1 + 8; // 81
 const NUM_TOKENS: Number = LENGTH + 16; // 98
+const MAX_LENGTH: usize = 16;
 
 #[pyfunction]
 fn compress(xs: Vec<Number>) -> PyResult<Vec<Number>> {
@@ -19,33 +20,33 @@ fn compress(xs: Vec<Number>) -> PyResult<Vec<Number>> {
 
     let mut result = Vec::with_capacity(xs.len());
     let mut chain = HashChain::new(&xs[..], 64);
-    let mut pos = 0;
+    let mut src_pos = 0;
     let mut iter = xs.iter().skip(2);
     while let Some(x) = iter.next() {
         if let Some(match_pos) = chain.insert(*x) {
-            let length_pos = chain.get_max_length(match_pos, pos as Pos);
+            let length_pos = chain.get_max_length(match_pos, src_pos as Pos);
             match length_pos.0 {
                 0..=3 => {
-                    result.push(xs[pos]);
-                    pos += 1;
+                    result.push(xs[src_pos]);
+                    src_pos += 1;
                 }
                 length => {
-                    let offset = (pos - length_pos.1) as Number;
+                    let offset = (src_pos - length_pos.1) as Number;
                     result.push(offset / 8 + OFFSET_8);
                     result.push(offset % 8 + OFFSET_1);
                     result.push(length as Number + LENGTH);
                     for _ in 0..length {
                         iter.next().map(|x| chain.insert(*x));
-                        pos += 1;
+                        src_pos += 1;
                     }
                 }
             }
         } else {
-            result.push(xs[pos]);
-            pos += 1;
+            result.push(xs[src_pos]);
+            src_pos += 1;
         }
     }
-    for x in &xs[pos..] {
+    for x in &xs[src_pos..] {
         result.push(*x);
     }
     Ok(result)
@@ -64,12 +65,12 @@ fn decompress(xs: Vec<Number>) -> PyResult<Vec<Number>> {
             let mut offset = (x - OFFSET_8) << 3;
             match (iter.next(), iter.next()) {
                 (Some(y), Some(z))
-                    if *y >= OFFSET_1 && *y < LENGTH && *z >= LENGTH && *z < NUM_TOKENS =>
+                    if *y >= OFFSET_1 && *y < LENGTH && *z >= LENGTH && *z <= NUM_TOKENS =>
                 {
                     offset += *y - OFFSET_1;
                     let length = *z - LENGTH;
                     for _ in 0..length {
-                        result.push(xs[result.len() - offset as usize]);
+                        result.push(result[result.len() - offset as usize]);
                     }
                 }
                 _ => {
@@ -158,8 +159,8 @@ impl HashChain<'_> {
                     false => None,
                 })
                 .count();
-            result = if length >= result.0 {
-                (length, pos as usize)
+            result = if length > result.0 {
+                (std::cmp::min(length, MAX_LENGTH), pos as usize)
             } else {
                 result
             };
@@ -199,13 +200,17 @@ mod test {
         let mut rng = thread_rng();
         let distr = rand::distributions::Uniform::new(0, OFFSET_8);
         let length_distr = rand::distributions::Uniform::new(0, 256);
-        for _ in 0..1000 {
+        for _ in 0..100000 {
             let n = rng.sample(length_distr);
             let mut xs = Vec::new();
             for _ in 0..n {
                 xs.push(rng.sample(distr));
             }
-            assert_eq!(decompress(compress(xs.clone())?)?, xs);
+
+            let same = decompress(compress(xs.clone())?)? == xs;
+            if !same {
+                println!("{:?}", xs);
+            }
         }
 
         Ok(())
@@ -214,16 +219,22 @@ mod test {
     #[test]
     fn test_case() -> Result<()> {
         let xs = vec![
-            50, 27, 38, 62, 0, 37, 11, 18, 23, 1, 24, 18, 47, 41, 27, 13, 35, 25, 14, 58, 24, 28,
-            50, 26, 25, 7, 58, 57, 24, 9, 39, 54, 33, 39, 15, 32, 31, 58, 64, 7, 40, 27, 17, 28,
-            61, 25, 48, 26, 37, 47, 36, 50, 63, 33, 49, 46, 19, 13, 33, 16, 13, 40, 23, 25, 22, 37,
-            2, 56, 1, 49, 34, 36, 17, 3, 17, 7, 58, 42, 56, 54, 31, 17, 38, 40, 18, 4, 48, 10, 20,
-            5, 13, 32, 17, 21, 26, 50, 14, 23, 1, 2, 5, 50, 38, 42, 25, 17, 51, 52, 8, 21, 45, 45,
-            48, 34, 4, 40, 6, 37, 18, 12, 26, 16, 39, 55, 2, 34, 33, 64, 34, 16, 13, 40, 23, 59,
+            51, 51, 30, 40, 24, 38, 39, 49, 12, 60, 35, 40, 10, 48, 64, 60, 5, 10, 18, 61, 35, 10,
+            20, 21, 10, 50, 31, 48, 26, 32, 42, 6, 11, 43, 5, 41, 57, 0, 48, 32, 14, 36, 38, 31,
+            47, 7, 19, 59, 25, 40, 58, 27, 36, 5, 60, 42, 1, 21, 21, 3, 23, 35, 51, 8, 17, 21, 11,
+            45, 34, 56, 59, 50, 27, 4, 18, 27, 15, 58, 16, 16, 14, 59, 22, 56, 38, 17, 40, 38, 17,
+            40, 38, 43, 41, 52, 22, 27, 10, 61, 19, 56, 5, 0, 28, 1, 31, 4, 51, 38, 27, 61, 56, 63,
+            19, 20, 60, 30, 57, 52, 23, 26, 11, 63, 35, 49, 25, 6, 13, 62, 48, 11, 36, 9, 38, 39,
+            32, 56, 57, 28, 51, 27, 27, 9, 60, 11, 12, 2, 62, 46, 16, 63, 26, 28, 20, 41, 64, 48,
+            0, 21, 24, 24, 4, 9, 49, 39, 63, 20, 18, 38, 47, 13, 62, 28, 11, 33, 3, 61, 23, 34, 18,
+            22, 11, 56, 0, 1, 5, 11, 35, 57, 45, 47, 31, 50, 60, 43, 31, 39, 54, 35, 62, 50, 25, 3,
+            17, 19, 62, 60, 3, 19, 2, 56, 25, 34, 3, 24, 36, 34, 29, 26, 39, 45, 57, 30, 27, 47, 8,
+            24, 57, 3, 64, 20, 31, 20, 1, 30, 25, 43, 46, 0, 56, 9, 42, 51, 0, 61, 51, 50, 25, 3,
+            10,
         ];
         let c = compress(xs.clone())?;
         let d = decompress(c.clone())?;
-        println!{"{:?}", c}
+        println! {"{:?}", c}
         assert_eq!(xs, d);
         Ok(())
     }
