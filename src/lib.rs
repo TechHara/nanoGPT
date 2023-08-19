@@ -177,8 +177,11 @@ impl HashChain<'_> {
 
 #[cfg(test)]
 mod test {
+    use crate::OFFSET_8;
+
     use super::compress;
     use super::decompress;
+    use rand::prelude::*;
 
     #[test]
     fn test() -> Result<(), Box<dyn std::error::Error>> {
@@ -186,6 +189,23 @@ mod test {
         let compressed = compress(x.clone())?;
         let decompressed = decompress(compressed)?;
         assert_eq!(x, decompressed);
+        Ok(())
+    }
+
+    #[test]
+    fn test_random() -> Result<(), Box<dyn std::error::Error>> {
+        let mut rng = thread_rng();
+        let distr = rand::distributions::Uniform::new(0, OFFSET_8);
+        let length_distr = rand::distributions::Uniform::new(0, 256);
+        for _ in 0..1000 {
+            let n = rng.sample(length_distr);
+            let mut xs = Vec::new();
+            for _ in 0..n {
+                xs.push(rng.sample(distr));
+            }
+            assert_eq!(decompress(compress(xs.clone())?)?, xs);
+        }
+
         Ok(())
     }
 }
