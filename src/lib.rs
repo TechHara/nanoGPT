@@ -1,14 +1,15 @@
-use pyo3::prelude::*;
+use pyo3::{exceptions::PyTypeError, prelude::*};
 
 type Number = i64;
 type Pos = u16;
 const MASK: usize = NUM_HASH - 1;
 const NUM_HASH: usize = 1 << 9; // 9 bit or 512
 
-// x from 0 to 64 inclusive
+// x from 0 to 64 inclusive, i.e., 65 tokens
 const OFFSET_8: Number = 65;
-const OFFSET_1: Number = 65 + 8;
-const LENGTH: Number = 65 + 16;
+const OFFSET_1: Number = OFFSET_8 + 8;
+const LENGTH: Number = OFFSET_1 + 8;
+const NUM_TOKENS: Number = LENGTH + 16;
 
 #[pyfunction]
 fn compress(xs: Vec<Number>) -> PyResult<Vec<Number>> {
@@ -50,10 +51,45 @@ fn compress(xs: Vec<Number>) -> PyResult<Vec<Number>> {
     Ok(result)
 }
 
+#[pyfunction]
+fn decompress(xs: Vec<Number>) -> PyResult<Vec<Number>> {
+    let mut result = Vec::new();
+    let mut iter = xs.iter();
+    while let Some(x) = iter.next() {
+        let x = *x;
+        if x < OFFSET_8 {
+            // literal
+            result.push(x);
+        } else if x < OFFSET_1 {
+            let mut offset = (x - OFFSET_8) << 3;
+            match (iter.next(), iter.next()) {
+                (Some(y), Some(z))
+                    if *y >= OFFSET_1 && *y < LENGTH && *z >= LENGTH && *z < NUM_TOKENS =>
+                {
+                    offset += *y - OFFSET_1;
+                    let length = *z - LENGTH;
+                    for _ in 0..length {
+                        result.push(xs[result.len() - offset as usize]);
+                    }
+                }
+                _ => {
+                    return Err(PyTypeError::new_err(format!(
+                        "Decompressor Error: Invalid error {}...",
+                        x
+                    )))
+                }
+            }
+        }
+    }
+
+    Ok(result)
+}
+
 /// A Python module implemented in Rust.
 #[pymodule]
 fn compressor(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(compress, m)?)?;
+    m.add_function(wrap_pyfunction!(decompress, m)?)?;
     Ok(())
 }
 
@@ -142,9 +178,14 @@ impl HashChain<'_> {
 #[cfg(test)]
 mod test {
     use super::compress;
+    use super::decompress;
 
     #[test]
-    fn test() {
-        println!("{:?}", compress(vec![0, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 6]));
+    fn test() -> Result<(), Box<dyn std::error::Error>> {
+        let x = vec![0, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 6];
+        let compressed = compress(x.clone())?;
+        let decompressed = decompress(compressed)?;
+        assert_eq!(x, decompressed);
+        Ok(())
     }
 }
