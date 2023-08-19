@@ -16,6 +16,11 @@ const MAX_LENGTH: usize = 16;
 fn compress(xs: Vec<Number>) -> PyResult<Vec<Number>> {
     if xs.len() < 3 {
         return Ok(xs);
+    } else if xs.len() > Pos::MAX as usize {
+        return Err(PyTypeError::new_err(format!(
+            "Input size too large: {}",
+            xs.len()
+        )));
     }
 
     let mut result = Vec::with_capacity(xs.len());
@@ -23,30 +28,34 @@ fn compress(xs: Vec<Number>) -> PyResult<Vec<Number>> {
     let mut src_pos = 0;
     let mut iter = xs.iter().skip(2);
     while let Some(x) = iter.next() {
+        if chain.cur_pos != src_pos {
+            println!("positions out of sync");
+        }
         if let Some(match_pos) = chain.insert(*x) {
             let length_pos = chain.get_max_length(match_pos, src_pos as Pos);
             match length_pos.0 {
                 0..=3 => {
-                    result.push(xs[src_pos]);
+                    result.push(xs[src_pos as usize]);
                     src_pos += 1;
                 }
                 length => {
-                    let offset = (src_pos - length_pos.1) as Number;
+                    let offset = (src_pos as usize - length_pos.1) as Number;
                     result.push(offset / 8 + OFFSET_8);
                     result.push(offset % 8 + OFFSET_1);
                     result.push(length as Number + LENGTH);
-                    for _ in 0..length {
+                    for _ in 0..length - 1 {
                         iter.next().map(|x| chain.insert(*x));
                         src_pos += 1;
                     }
+                    src_pos += 1;
                 }
             }
         } else {
-            result.push(xs[src_pos]);
+            result.push(xs[src_pos as usize]);
             src_pos += 1;
         }
     }
-    for x in &xs[src_pos..] {
+    for x in &xs[src_pos as usize..] {
         result.push(*x);
     }
     Ok(result)
@@ -219,18 +228,17 @@ mod test {
     #[test]
     fn test_case() -> Result<()> {
         let xs = vec![
-            51, 51, 30, 40, 24, 38, 39, 49, 12, 60, 35, 40, 10, 48, 64, 60, 5, 10, 18, 61, 35, 10,
-            20, 21, 10, 50, 31, 48, 26, 32, 42, 6, 11, 43, 5, 41, 57, 0, 48, 32, 14, 36, 38, 31,
-            47, 7, 19, 59, 25, 40, 58, 27, 36, 5, 60, 42, 1, 21, 21, 3, 23, 35, 51, 8, 17, 21, 11,
-            45, 34, 56, 59, 50, 27, 4, 18, 27, 15, 58, 16, 16, 14, 59, 22, 56, 38, 17, 40, 38, 17,
-            40, 38, 43, 41, 52, 22, 27, 10, 61, 19, 56, 5, 0, 28, 1, 31, 4, 51, 38, 27, 61, 56, 63,
-            19, 20, 60, 30, 57, 52, 23, 26, 11, 63, 35, 49, 25, 6, 13, 62, 48, 11, 36, 9, 38, 39,
-            32, 56, 57, 28, 51, 27, 27, 9, 60, 11, 12, 2, 62, 46, 16, 63, 26, 28, 20, 41, 64, 48,
-            0, 21, 24, 24, 4, 9, 49, 39, 63, 20, 18, 38, 47, 13, 62, 28, 11, 33, 3, 61, 23, 34, 18,
-            22, 11, 56, 0, 1, 5, 11, 35, 57, 45, 47, 31, 50, 60, 43, 31, 39, 54, 35, 62, 50, 25, 3,
-            17, 19, 62, 60, 3, 19, 2, 56, 25, 34, 3, 24, 36, 34, 29, 26, 39, 45, 57, 30, 27, 47, 8,
-            24, 57, 3, 64, 20, 31, 20, 1, 30, 25, 43, 46, 0, 56, 9, 42, 51, 0, 61, 51, 50, 25, 3,
-            10,
+            14, 10, 24, 11, 57, 60, 39, 8, 22, 12, 29, 35, 17, 6, 62, 16, 32, 28, 2, 43, 1, 15, 13,
+            54, 48, 62, 39, 11, 45, 31, 31, 57, 56, 29, 60, 28, 48, 17, 5, 10, 53, 25, 33, 52, 63,
+            11, 15, 58, 35, 36, 31, 39, 18, 8, 28, 10, 53, 16, 43, 52, 46, 28, 59, 23, 26, 37, 39,
+            2, 23, 16, 33, 51, 0, 13, 51, 3, 21, 47, 32, 7, 12, 16, 4, 45, 24, 59, 13, 23, 63, 4,
+            16, 18, 54, 12, 40, 19, 53, 2, 24, 22, 63, 60, 27, 11, 22, 8, 54, 16, 37, 29, 58, 14,
+            14, 41, 45, 37, 40, 55, 6, 40, 56, 36, 52, 32, 0, 6, 35, 15, 2, 14, 20, 38, 57, 61, 19,
+            24, 50, 9, 30, 7, 0, 55, 27, 30, 11, 35, 28, 20, 38, 4, 59, 59, 8, 31, 10, 60, 17, 28,
+            36, 27, 32, 26, 9, 46, 51, 11, 47, 15, 61, 11, 41, 57, 32, 18, 17, 24, 23, 3, 6, 39,
+            47, 18, 22, 26, 46, 16, 18, 17, 24, 23, 52, 39, 48, 6, 30, 19, 11, 21, 51, 50, 23, 11,
+            19, 43, 25, 13, 39, 21, 26, 43, 7, 34, 10, 44, 58, 32, 42, 52, 58, 1, 54, 15, 49, 28,
+            25, 8, 25, 31, 0, 61, 64, 55, 2, 50, 16, 25, 59,
         ];
         let c = compress(xs.clone())?;
         let d = decompress(c.clone())?;
