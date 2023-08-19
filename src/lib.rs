@@ -6,10 +6,12 @@ const MASK: usize = NUM_HASH - 1;
 const NUM_HASH: usize = 1 << 9; // 9 bit or 512
 
 // x from 0 to 64 inclusive, i.e., 65 tokens
-const OFFSET_8: Number = 65;
-const OFFSET_1: Number = OFFSET_8 + 8; // 73
-const LENGTH: Number = OFFSET_1 + 8; // 81
-const NUM_TOKENS: Number = LENGTH + 16; // 98
+const MAX_OFFSET: usize = 256;
+const BASE: Number = 16;
+const OFFSET_16: Number = 65;
+const OFFSET_1: Number = OFFSET_16 + BASE; // 81
+const LENGTH: Number = OFFSET_1 + BASE; // 97
+const NUM_TOKENS: Number = LENGTH + MAX_LENGTH as Number; // 113
 const MAX_LENGTH: usize = 16;
 
 #[pyfunction]
@@ -24,7 +26,7 @@ fn compress(xs: Vec<Number>) -> PyResult<Vec<Number>> {
     }
 
     let mut result = Vec::with_capacity(xs.len());
-    let mut chain = HashChain::new(&xs[..], 64);
+    let mut chain = HashChain::new(&xs[..], MAX_OFFSET);
     let mut src_pos = 0;
     let mut iter = xs.iter().skip(2);
     while let Some(x) = iter.next() {
@@ -40,8 +42,8 @@ fn compress(xs: Vec<Number>) -> PyResult<Vec<Number>> {
                 }
                 length => {
                     let offset = (src_pos as usize - length_pos.1) as Number;
-                    result.push(offset / 8 + OFFSET_8);
-                    result.push(offset % 8 + OFFSET_1);
+                    result.push(offset / BASE + OFFSET_16);
+                    result.push(offset % BASE + OFFSET_1);
                     result.push(length as Number + LENGTH);
                     for _ in 0..length - 1 {
                         iter.next().map(|x| chain.insert(*x));
@@ -67,11 +69,11 @@ fn decompress(xs: Vec<Number>) -> PyResult<Vec<Number>> {
     let mut iter = xs.iter();
     while let Some(x) = iter.next() {
         let x = *x;
-        if x < OFFSET_8 {
+        if x < OFFSET_16 {
             // literal
             result.push(x);
         } else if x < OFFSET_1 {
-            let mut offset = (x - OFFSET_8) << 3;
+            let mut offset = (x - OFFSET_16) * BASE;
             match (iter.next(), iter.next()) {
                 (Some(y), Some(z))
                     if *y >= OFFSET_1 && *y < LENGTH && *z >= LENGTH && *z <= NUM_TOKENS =>
@@ -194,7 +196,7 @@ impl HashChain<'_> {
 #[cfg(test)]
 mod test {
     type Result<R> = std::result::Result<R, Box<dyn std::error::Error>>;
-    use crate::OFFSET_8;
+    use crate::OFFSET_16;
 
     use super::compress;
     use super::decompress;
@@ -213,7 +215,7 @@ mod test {
     fn test_random() -> Result<()> {
         pyo3::prepare_freethreaded_python();
         let mut rng = thread_rng();
-        let distr = rand::distributions::Uniform::new(0, OFFSET_8);
+        let distr = rand::distributions::Uniform::new(0, OFFSET_16);
         let length_distr = rand::distributions::Uniform::new(0, 256);
         for _ in 0..100000 {
             let n = rng.sample(length_distr);
@@ -234,30 +236,22 @@ mod test {
     #[test]
     fn test_case() -> Result<()> {
         let xs = vec![
-            0, 13, 57, 1, 51, 63, 1, 46, 39, 60, 43, 1, 52, 53, 58, 46, 43, 56, 1, 52, 53, 1, 50,
-            53, 56, 42, 47, 43, 42, 6, 71, 74, 85, 53, 56, 1, 52, 53, 71, 79, 86, 58, 56, 59, 58,
-            59, 44, 58, 1, 40, 53, 59, 56, 57, 8, 0, 0, 31, 43, 41, 53, 52, 57, 10, 0, 21, 1, 61,
-            46, 39, 58, 1, 57, 47, 56, 6, 1, 61, 46, 43, 52, 1, 43, 60, 43, 56, 1, 58, 53, 53, 6,
-            1, 46, 39, 58, 46, 1, 46, 47, 57, 1, 50, 47, 43, 44, 59, 50, 1, 58, 53, 1, 40, 43, 50,
-            50, 8, 0, 37, 43, 58, 1, 40, 43, 1, 53, 41, 46, 43, 43, 56, 57, 1, 46, 43, 39, 56, 58,
-            1, 44, 56, 53, 51, 1, 46, 66, 78, 85, 6, 0, 35, 47, 42, 53, 56, 43, 52, 1, 39, 52, 42,
-            1, 40, 43, 1, 50, 47, 44, 43, 12, 0, 0, 32, 46, 43, 1, 54, 56, 39, 63, 10, 0, 20, 43,
-            56, 43, 50, 47, 39, 52, 41, 43, 57, 6, 1, 58, 56, 53, 52, 45, 1, 46, 43, 39, 56, 1, 51,
-            43, 1, 47, 52, 1, 53, 59, 56, 58, 1, 47, 52, 1, 53, 52, 43, 8, 0, 0, 15, 24, 13, 30,
-            17, 26, 15, 17, 10, 0, 20, 39, 42, 1, 58, 46, 47, 57, 1, 63, 53, 59, 6, 1, 53, 52, 1,
-            21, 1, 54, 39, 41, 43, 6, 1, 39, 57, 1, 63, 53, 59, 1, 41, 39, 52, 52, 53, 58, 1, 58,
-            46, 53, 59, 45, 46, 0, 32, 46, 43, 1, 41, 39, 47, 50, 50, 69, 75, 86, 54, 53, 61, 43,
-            56, 8, 1, 13, 52, 42, 71, 74, 85, 41, 53, 51, 51, 43, 52, 58, 0, 13, 57, 1, 58, 56, 59,
-            43, 1, 63, 43, 39, 11, 1, 39, 52, 42, 7, 7, 61, 47, 58, 46, 43, 56, 1, 61, 53, 56, 58,
-            46, 53, 56, 57, 6, 0, 35, 46, 47, 41, 46, 1, 46, 47, 51, 1, 57, 53, 53, 52, 1, 39, 1,
-            41, 53, 52, 58, 50, 43, 1, 58, 46, 39, 52, 10, 0, 31, 58, 39, 52, 58, 6, 1, 61, 47, 50,
-            50, 1, 52, 53, 58, 43, 69, 74, 86, 57, 46, 39, 50, 50, 1, 52, 53, 58, 1, 57, 59, 57,
-            43, 1, 45, 56, 39, 41, 49, 6, 1, 51, 39, 49, 43, 1, 48, 53, 47, 57, 43, 8, 0, 0, 30,
-            21, 27, 24, 13, 26, 33, 31, 10, 0, 14, 59, 58, 1, 5, 58, 47, 57, 1, 40, 39, 52, 1, 58,
-            39, 49, 43, 1, 58, 56, 39, 47, 50, 1, 57, 46, 39, 50, 50, 1, 39, 50, 50, 1, 58, 46, 43,
-            1, 54, 50, 43, 43, 55, 59, 43, 1, 47, 58, 8, 0, 27, 1, 50, 39, 63, 1, 51, 39,
+            15, 20, 14, 58, 48, 31, 13, 50, 62, 54, 54, 27, 24, 44, 28, 19, 48, 22, 5, 9, 44, 16,
+            36, 57, 28, 17, 58, 23, 4, 47, 26, 0, 64, 54, 42, 32, 21, 30, 18, 31, 10, 29, 52, 52,
+            10, 43, 27, 15, 21, 9, 14, 20, 6, 8, 30, 58, 24, 42, 37, 4, 63, 62, 63, 38, 2, 10, 14,
+            33, 50, 57, 56, 37, 31, 31, 2, 21, 16, 52, 38, 23, 25, 57, 12, 26, 11, 6, 59, 14, 41,
+            62, 61, 39, 2, 63, 8, 58, 57, 36, 61, 20, 46, 32, 47, 7, 54, 19, 40, 16, 48, 55, 19,
+            62, 29, 2, 45, 42, 1, 23, 14, 57, 15, 41, 1, 48, 60, 54, 47, 62, 30, 42, 12, 30, 36,
+            11, 39, 2, 46, 5, 39, 48, 16, 30, 46, 1, 15, 44, 20, 48, 14, 58, 48, 31, 6, 40, 39, 1,
+            34, 45, 41, 24, 38, 24, 46, 40, 56, 56, 14, 43, 60, 24, 52, 35, 51, 7, 32, 0, 25, 40,
+            62, 12, 38, 38, 47, 40, 52, 63, 63, 5, 26, 22, 30, 53, 27, 7, 25, 46, 11, 26, 40, 19,
+            45, 52, 31, 31, 36, 14, 24, 60, 5, 49, 7, 30, 14, 19, 27, 58, 37, 9, 52, 11, 24, 64,
+            15, 44, 30, 15, 38, 56, 4, 16, 26, 6, 46, 48, 50, 43, 16, 6, 49, 58, 19, 22, 6, 63, 20,
+            30, 0, 35, 59,
         ];
-        let d = decompress(xs.clone())?;
+        let c = compress(xs.clone())?;
+        let d = decompress(c.clone())?;
+        assert_eq!(xs, d);
         Ok(())
     }
 }

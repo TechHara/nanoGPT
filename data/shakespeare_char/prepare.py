@@ -53,7 +53,7 @@ val_ids.tofile(os.path.join(os.path.dirname(__file__), 'val.bin'))
 
 # save the meta information as well, to help us encode/decode later
 meta = {
-    'vocab_size': vocab_size + 16 + 16 + 1, # 4x4 (offset) + 16 (length) + 1 (pad)
+    'vocab_size': vocab_size + 32 + 16 + 1, # 4x4 (offset) + 16 (length) + 1 (pad)
     'itos': itos,
     'stoi': stoi,
 }
