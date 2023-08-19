@@ -7,9 +7,9 @@ const NUM_HASH: usize = 1 << 9; // 9 bit or 512
 
 // x from 0 to 64 inclusive, i.e., 65 tokens
 const OFFSET_8: Number = 65;
-const OFFSET_1: Number = OFFSET_8 + 8;
-const LENGTH: Number = OFFSET_1 + 8;
-const NUM_TOKENS: Number = LENGTH + 16;
+const OFFSET_1: Number = OFFSET_8 + 8; // 73
+const LENGTH: Number = OFFSET_1 + 8; // 81
+const NUM_TOKENS: Number = LENGTH + 16; // 98
 
 #[pyfunction]
 fn compress(xs: Vec<Number>) -> PyResult<Vec<Number>> {
@@ -18,7 +18,7 @@ fn compress(xs: Vec<Number>) -> PyResult<Vec<Number>> {
     }
 
     let mut result = Vec::with_capacity(xs.len());
-    let mut chain = HashChain::new(&xs[..], 256);
+    let mut chain = HashChain::new(&xs[..], 64);
     let mut pos = 0;
     let mut iter = xs.iter().skip(2);
     while let Some(x) = iter.next() {
@@ -221,7 +221,10 @@ mod test {
             5, 13, 32, 17, 21, 26, 50, 14, 23, 1, 2, 5, 50, 38, 42, 25, 17, 51, 52, 8, 21, 45, 45,
             48, 34, 4, 40, 6, 37, 18, 12, 26, 16, 39, 55, 2, 34, 33, 64, 34, 16, 13, 40, 23, 59,
         ];
-        assert_eq!(decompress(compress(xs.clone())?)?, xs);
+        let c = compress(xs.clone())?;
+        let d = decompress(c.clone())?;
+        println!{"{:?}", c}
+        assert_eq!(xs, d);
         Ok(())
     }
 }
