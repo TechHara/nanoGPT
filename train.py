@@ -120,9 +120,8 @@ import compressor
 def get_batch(split):
     data = train_data if split == 'train' else val_data
     ix = torch.randint(len(data) - block_size*2, (batch_size,))
-    xy = torch.ones((batch_size, block_size + 1), dtype=torch.int64).fill_(97) # pad
+    xy = torch.ones((batch_size, block_size + 1), dtype=torch.int64).fill_(0) # pad
     for idx,i in enumerate(ix):
-
         x = torch.tensor(compressor.compress(data[i:i+1+block_size*2].astype(np.int64).tolist()))
         dim = min(len(x), block_size + 1)
         xy[idx,:dim] = x[:dim]

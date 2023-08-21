@@ -11,7 +11,7 @@ const BASE: Number = 32;
 const OFFSET_32: Number = 65;
 const OFFSET_1: Number = OFFSET_32 + BASE; // 81
 const LENGTH: Number = OFFSET_1 + BASE; // 97
-const NUM_TOKENS: Number = LENGTH + MAX_LENGTH as Number; // 113
+const NUM_TOKENS: Number = LENGTH + MAX_LENGTH as Number + 1; // 113
 const MAX_LENGTH: usize = 16;
 
 #[pyfunction]
