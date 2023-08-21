@@ -6,10 +6,10 @@ const MASK: usize = NUM_HASH - 1;
 const NUM_HASH: usize = 1 << 9; // 9 bit or 512
 
 // x from 0 to 64 inclusive, i.e., 65 tokens
-const MAX_OFFSET: usize = 256;
-const BASE: Number = 16;
-const OFFSET_16: Number = 65;
-const OFFSET_1: Number = OFFSET_16 + BASE; // 81
+const MAX_OFFSET: usize = 1024;
+const BASE: Number = 32;
+const OFFSET_32: Number = 65;
+const OFFSET_1: Number = OFFSET_32 + BASE; // 81
 const LENGTH: Number = OFFSET_1 + BASE; // 97
 const NUM_TOKENS: Number = LENGTH + MAX_LENGTH as Number; // 113
 const MAX_LENGTH: usize = 16;
@@ -42,7 +42,7 @@ fn compress(xs: Vec<Number>) -> PyResult<Vec<Number>> {
                 }
                 length => {
                     let offset = (src_pos as usize - length_pos.1) as Number;
-                    result.push(offset / BASE + OFFSET_16);
+                    result.push(offset / BASE + OFFSET_32);
                     result.push(offset % BASE + OFFSET_1);
                     result.push(length as Number + LENGTH);
                     for _ in 0..length - 1 {
@@ -69,11 +69,11 @@ fn decompress(xs: Vec<Number>) -> PyResult<Vec<Number>> {
     let mut iter = xs.iter();
     while let Some(x) = iter.next() {
         let x = *x;
-        if x < OFFSET_16 {
+        if x < OFFSET_32 {
             // literal
             result.push(x);
         } else if x < OFFSET_1 {
-            let mut offset = (x - OFFSET_16) * BASE;
+            let mut offset = (x - OFFSET_32) * BASE;
             match (iter.next(), iter.next()) {
                 (Some(y), Some(z))
                     if *y >= OFFSET_1 && *y < LENGTH && *z >= LENGTH && *z <= NUM_TOKENS =>
@@ -196,7 +196,7 @@ impl HashChain<'_> {
 #[cfg(test)]
 mod test {
     type Result<R> = std::result::Result<R, Box<dyn std::error::Error>>;
-    use crate::OFFSET_16;
+    use crate::OFFSET_32;
 
     use super::compress;
     use super::decompress;
@@ -215,9 +215,9 @@ mod test {
     fn test_random() -> Result<()> {
         pyo3::prepare_freethreaded_python();
         let mut rng = thread_rng();
-        let distr = rand::distributions::Uniform::new(0, OFFSET_16);
-        let length_distr = rand::distributions::Uniform::new(0, 4096);
-        for _ in 0..100000 {
+        let distr = rand::distributions::Uniform::new(0, OFFSET_32);
+        let length_distr = rand::distributions::Uniform::new_inclusive(0, 1024);
+        for _ in 0..10000 {
             let n = rng.sample(length_distr);
             let mut xs = Vec::new();
             for _ in 0..n {

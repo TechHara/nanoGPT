@@ -1,9 +1,9 @@
 python train.py config/train_shakespeare_char.py \
 --device=cpu \
 --compile=False \
---eval_iters=20 \
+--eval_iters=50 \
 --log_interval=100 \
---block_size=256 \
+--block_size=1024 \
 --batch_size=12 \
 --n_layer=4 \
 --n_head=4 \
