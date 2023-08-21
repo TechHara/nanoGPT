@@ -216,7 +216,7 @@ mod test {
         pyo3::prepare_freethreaded_python();
         let mut rng = thread_rng();
         let distr = rand::distributions::Uniform::new(0, OFFSET_16);
-        let length_distr = rand::distributions::Uniform::new(0, 256);
+        let length_distr = rand::distributions::Uniform::new(0, 4096);
         for _ in 0..100000 {
             let n = rng.sample(length_distr);
             let mut xs = Vec::new();

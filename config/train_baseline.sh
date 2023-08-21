@@ -8,7 +8,7 @@ python train.py config/train_shakespeare_char.py \
 --n_layer=4 \
 --n_head=4 \
 --n_embd=128 \
---max_iters=10000 \
+--max_iters=2000 \
 --lr_decay_iters=2000 \
 --dropout=0.0 \
---init_from=resume
+--init_from=scratch 
