@@ -84,9 +84,13 @@ config = {k: globals()[k] for k in config_keys} # will be useful for logging
 
 
 def transform(xs):
-    n = min(block_size + 1, len(xs))
-    xs = xs[:n].to(torch.long)
-    return xs[:n-1], xs[1:n]
+    if block_size >= len(xs):
+        return xs[:-1], xs[1:]
+    
+    # len(xs) >= block_size + 1
+    ub = len(xs) - block_size  # ub >= 1
+    start = torch.randint(ub, (1,))
+    return xs[start:start+block_size], xs[start+1:start+1+block_size]
     
 
 def get_batch_continuous(loader):
