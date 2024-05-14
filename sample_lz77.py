@@ -75,7 +75,10 @@ else:
         return torch.from_numpy(encoded).to(torch.long)
 
     def decode(xs):
-        decoded = lz.decode(np.asarray(xs, dtype=np.uint16))
+        # remove trailing tokens >= 256
+        xs = np.asarray(xs, dtype=np.uint16)
+        truncate_index = np.where(xs < 256)[0][-1] + 1
+        decoded = lz.decode(xs[:truncate_index])
         return bytes(decoded).decode(errors='ignore')
     # encode = lambda s: enc.encode(s, allowed_special={"<|endoftext|>"})
     # decode = lambda l: enc.decode(l)
