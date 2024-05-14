@@ -31,11 +31,12 @@ from datasets import load_dataset
 from model import GPTConfig, GPT
 from data import TextDataset, TransformDataset, Collate
 
+import lz
 
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
-out_dir = 'char'
+out_dir = 'lz77'
 eval_interval = 100
 log_interval = 1
 eval_iters = 200
@@ -51,6 +52,8 @@ dataset = 'openwebtext'
 gradient_accumulation_steps = 5 * 8 # used to simulate larger batch sizes
 batch_size = 16 # if gradient_accumulation_steps > 1, this is the micro-batch size
 block_size = 256
+pad_token_id = 898
+
 # model
 n_layer = 3
 n_head = 3
@@ -84,14 +87,12 @@ config = {k: globals()[k] for k in config_keys} # will be useful for logging
 
 
 def transform(xs):
-    xs = torch.from_numpy(xs)
-    if block_size >= len(xs):
-        return xs[:-1], xs[1:]
-    
-    # len(xs) >= block_size + 1
-    ub = len(xs) - block_size  # ub >= 1
-    start = torch.randint(ub, (1,))
-    return xs[start:start+block_size], xs[start+1:start+1+block_size]
+    ub = max(1, len(xs) - block_size * 3 // 2) # ub >= 1
+    start = torch.randint(ub, (1,)).item()
+    encoded = lz.encode(xs[start:])
+    n = min(len(encoded), block_size + 1)
+    encoded = torch.from_numpy(encoded)
+    return encoded[:n-1], encoded[1:n]
     
 
 def get_batch_continuous(loader):
@@ -145,8 +146,8 @@ def main():
     trainset = TransformDataset(trainset, transform)
     valset = TransformDataset(valset, transform)
 
-    trainloader = DataLoader(trainset, batch_size, True, collate_fn=Collate(0), num_workers=num_workers)
-    valloader = DataLoader(valset, batch_size, True, collate_fn=Collate(0), num_workers=num_workers)
+    trainloader = DataLoader(trainset, batch_size, True, collate_fn=Collate(pad_token_id), num_workers=num_workers)
+    valloader = DataLoader(valset, batch_size, True, collate_fn=Collate(pad_token_id), num_workers=num_workers)
 
     # poor man's data loader
     data_dir = os.path.join('data', dataset)
@@ -202,8 +203,8 @@ def main():
         print("Initializing a new model from scratch")
         # determine the vocab size we'll use for from-scratch training
         if meta_vocab_size is None:
-            print("using char vocab size of 256")
-        model_args['vocab_size'] = meta_vocab_size if meta_vocab_size is not None else 256
+            print(f"using char vocab size of {pad_token_id + 1}")
+        model_args['vocab_size'] = meta_vocab_size if meta_vocab_size is not None else pad_token_id + 1
         gptconf = GPTConfig(**model_args)
         model = GPT(gptconf)
     elif init_from == 'resume':

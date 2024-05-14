@@ -1,0 +1,3 @@
+[submodule "pylz"]
+	path = pylz
+	url = git@github.com:TechHara/pylz.git

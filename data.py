@@ -1,5 +1,6 @@
 import torch
 from torch.utils.data import Dataset
+import numpy as np
 
 
 class TextDataset(Dataset):
@@ -8,7 +9,7 @@ class TextDataset(Dataset):
 
     def __getitem__(self, index) -> str:
         text = self.dataset[index]['text'] + '\0'
-        return torch.frombuffer(text.encode(), dtype=torch.uint8)
+        return np.frombuffer(text.encode(), dtype=np.uint8)
 
     def __len__(self) -> int:
         return len(self.dataset)
@@ -26,8 +27,12 @@ class TransformDataset(Dataset):
         return len(self.dataset)
 
 
-def pad_collate_fn(batch):
-    """
-    batch is a list of tuple of torch arrays
-    """
-    return list(torch.nn.utils.rnn.pad_sequence(xs, True, 0).to(torch.long) for xs in zip(*batch))
+class Collate:
+    def __init__(self, pad):
+        self.pad = pad
+
+    def __call__(self, batch):
+        """
+        batch is a list of tuple of torch arrays
+        """
+        return list(torch.nn.utils.rnn.pad_sequence(xs, True, self.pad).to(torch.long) for xs in zip(*batch))
