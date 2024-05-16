@@ -110,6 +110,13 @@ def transform_next_token(xs: np.ndarray):
     return encoded[:n-1], encoded[1:n]
 
 
+def transform(xs: np.ndarray):
+    if torch.rand(1).item() < 0.5:
+        return transform_next_token(xs)
+    else:
+        return transform_decode(xs)
+
+
 def get_batch_continuous(loader):
     while True:
         yield from loader
@@ -158,8 +165,8 @@ def main():
     trainset = TextDataset(split_dataset['train'])
     valset = TextDataset(split_dataset['val'])
 
-    trainset = TransformDataset(trainset, transform_decode)
-    valset = TransformDataset(valset, transform_decode)
+    trainset = TransformDataset(trainset, transform)
+    valset = TransformDataset(valset, transform_next_token)
 
     trainloader = DataLoader(trainset, batch_size, True, collate_fn=Collate(pad_token_id), num_workers=num_workers)
     valloader = DataLoader(valset, batch_size, True, collate_fn=Collate(pad_token_id), num_workers=num_workers)
